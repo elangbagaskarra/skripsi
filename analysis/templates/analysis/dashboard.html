@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard - Sentiment Analysis</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/wordcloud@1.2.2/src/wordcloud2.js"></script>
+    <style>
+      body {
+        padding-top: 70px;
+        background-color: #f5f5f5;
+      }
+      .navbar {
+        background-color: #1e3a8a;
+      }
+      .card-stats {
+        text-align: center;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+      .chart-container {
+        background-color: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+      #wordCloud {
+        width: 100%;
+        height: 300px;
+        background-color: white;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="#">SENTIMENT ANALYSIS</a>
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navbarNav"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav">
+            <li class="nav-item">
+              <a class="nav-link active" href="{% url 'analysis:dashboard' %}"
+                >Dashboard</a
+              >
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'analysis:dataset' %}"
+                >Dataset</a
+              >
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'analysis:tfidf' %}">TF-IDF</a>
+            </li>
+            <li class="nav-item">
+              <a
+                class="nav-link"
+                href="{% url 'analysis:naive_bayes_dataset' %}"
+                >Naive Bayes</a
+              >
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'analysis:svm_dataset' %}"
+                >SVM</a
+              >
+            </li>
+            <li class="nav-item">
+              <a
+                class="nav-link"
+                href="{% url 'analysis:summary_performance' %}"
+                >Summary Performance</a
+              >
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'analysis:manajemen_user' %}"
+                >Manajemen User</a
+              >
+            </li>
+          </ul>
+          <ul class="navbar-nav ms-auto">
+            <li class="nav-item">
+              <a class="nav-link" href="#">LOGOUT</a>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Breadcrumb -->
+    <div class="container mt-3">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+          <li class="breadcrumb-item"><a href="#">Home</a></li>
+          <li class="breadcrumb-item active" aria-current="page">DASHBOARD</li>
+        </ol>
+      </nav>
+    </div>
+
+    <!-- Dashboard -->
+    <div class="container">
+      <h2>DASHBOARD</h2>
+      <!-- Statistik -->
+      <div class="row mt-4">
+        <div class="col-md-3">
+          <div class="card-stats bg-light">
+            <h5>TOTAL DATASET</h5>
+            <h3>{{ stats.total_dataset }}</h3>
+            <p>Total Kata: {{ total_kata.total_kata }}</p>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card-stats bg-light">
+            <h5>DATASET - POSITIF</h5>
+            <h3>{{ stats.positif }}</h3>
+            <p>Total Kata: {{ total_kata.kata_positif }}</p>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card-stats bg-light">
+            <h5>DATASET - NEGATIF</h5>
+            <h3>{{ stats.negatif }}</h3>
+            <p>Total Kata: {{ total_kata.kata_negatif }}</p>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card-stats bg-light">
+            <h5>DATASET - NETRAL</h5>
+            <h3>{{ stats.netral }}</h3>
+            <p>Total Kata: {{ total_kata.kata_netral }}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Distribusi Sentimen & Metrik -->
+      <div class="row mt-4">
+        <div class="col-md-6">
+          <div class="chart-container">
+            <h5>DISTRIBUSI SENTIMEN</h5>
+            <canvas id="sentimentPieChart"></canvas>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="chart-container">
+            <h5>DIAGRAM AKURASI, PRESISI DAN RECALL</h5>
+            <canvas id="performanceBarChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top 10 Words -->
+      <div class="row mt-4">
+        <div class="col-md-4">
+          <div class="chart-container">
+            <h5>TOP 10 WORDS IN POSITIF SENTIMENT</h5>
+            <canvas id="positiveWordsChart"></canvas>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="chart-container">
+            <h5>TOP 10 WORDS IN NEGATIF SENTIMENT</h5>
+            <canvas id="negativeWordsChart"></canvas>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="chart-container">
+            <h5>TOP 10 WORDS IN NETRAL SENTIMENT</h5>
+            <canvas id="neutralWordsChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Word Cloud & Three Word Combination -->
+      <div class="row mt-4">
+        <div class="col-md-6">
+          <div class="chart-container">
+            <h5>WORDCLOUD</h5>
+            <div id="wordCloud"></div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="chart-container">
+            <h5>TOP 10 THREE-WORD COMBINATIONS</h5>
+            <canvas id="threeWordChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+      // Inisialisasi Chart
+      // Pie Chart Distribusi Sentimen
+      new Chart(document.getElementById('sentimentPieChart'), {
+          type: 'pie',
+          data: {
+              labels: ['Positif', 'Negatif', 'Netral'],
+              datasets: [{
+                  data: [{{ stats.positif }}, {{ stats.negatif }}, {{ stats.netral }}],
+                  backgroundColor: ['#1e90ff', '#ff4500', '#ffd700']
+              }]
+          }
+      });
+
+      // Bar Chart Metrik Performa
+      new Chart(document.getElementById('performanceBarChart'), {
+          type: 'bar',
+          data: {
+              labels: ['Akurasi', 'Presisi', 'Recall'],
+              datasets: [
+                  {
+                      label: 'Naive Bayes',
+                      data: [{{ metrics.naive_bayes.accuracy }}, {{ metrics.naive_bayes.precision }}, {{ metrics.naive_bayes.recall }}],
+                      backgroundColor: '#ff4500'
+                  },
+                  {
+                      label: 'SVM',
+                      data: [{{ metrics.svm.accuracy }}, {{ metrics.svm.precision }}, {{ metrics.svm.recall }}],
+                      backgroundColor: '#32cd32'
+                  }
+              ]
+          },
+          options: {
+              scales: {
+                  y: { beginAtZero: true, max: 100 }
+              }
+          }
+      });
+
+      // Bar Chart Top 10 Kata Positif
+      new Chart(document.getElementById('positiveWordsChart'), {
+          type: 'bar',
+          data: {
+              labels: [{% for word, count in top_words.positif %}"{{ word }}",{% endfor %}],
+              datasets: [{
+                  label: 'Count',
+                  data: [{% for word, count in top_words.positif %}{{ count }},{% endfor %}],
+                  backgroundColor: '#1e90ff'
+              }]
+          },
+          options: {
+              indexAxis: 'y'
+          }
+      });
+
+      // Bar Chart Top 10 Kata Negatif
+      new Chart(document.getElementById('negativeWordsChart'), {
+          type: 'bar',
+          data: {
+              labels: [{% for word, count in top_words.negatif %}"{{ word }}",{% endfor %}],
+              datasets: [{
+                  label: 'Count',
+                  data: [{% for word, count in top_words.negatif %}{{ count }},{% endfor %}],
+                  backgroundColor: '#ff4500'
+              }]
+          },
+          options: {
+              indexAxis: 'y'
+          }
+      });
+
+      // Bar Chart Top 10 Kata Netral
+      new Chart(document.getElementById('neutralWordsChart'), {
+          type: 'bar',
+          data: {
+              labels: [{% for word, count in top_words.netral %}"{{ word }}",{% endfor %}],
+              datasets: [{
+                  label: 'Count',
+                  data: [{% for word, count in top_words.netral %}{{ count }},{% endfor %}],
+                  backgroundColor: '#ffd700'
+              }]
+          },
+          options: {
+              indexAxis: 'y'
+          }
+      });
+
+      // Bar Chart Top 10 Kombinasi Tiga Kata
+      new Chart(document.getElementById('threeWordChart'), {
+          type: 'bar',
+          data: {
+              labels: [{% for phrase, count in three_word_combinations %}"{{ phrase }}",{% endfor %}],
+              datasets: [{
+                  label: 'Count',
+                  data: [{% for phrase, count in three_word_combinations %}{{ count }},{% endfor %}],
+                  backgroundColor: '#228b22'
+              }]
+          },
+          options: {
+              indexAxis: 'y'
+          }
+      });
+
+      // Word Cloud
+      WordCloud(document.getElementById('wordCloud'), {
+          list: [{% for word, freq in word_cloud %}"{{ word }}", {{ freq }}{% if not forloop.last %},{% endif %}{% endfor %}],
+          weightFactor: 2,
+          color: 'random-dark',
+          backgroundColor: '#fff'
+      });
+    </script>
+  </body>
+</html>

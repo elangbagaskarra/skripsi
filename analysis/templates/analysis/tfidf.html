@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TF-IDF - Sentiment Analysis</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        padding-top: 70px;
+        background-color: #f5f5f5;
+      }
+      .navbar {
+        background-color: #1e3a8a;
+      }
+      .table-container {
+        background-color: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+      .score-list {
+        padding-left: 0;
+        list-style: none;
+      }
+      .score-list li {
+        margin-bottom: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="{% url 'analysis:dashboard' %}"
+          >SENTIMENT ANALYSIS</a
+        >
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navbarNav"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav">
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'analysis:dashboard' %}"
+                >Dashboard</a
+              >
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'analysis:dataset' %}"
+                >Dataset</a
+              >
+            </li>
+            <li class="nav-item">
+              <a class="nav-link active" href="{% url 'analysis:tfidf' %}"
+                >TF-IDF</a
+              >
+            </li>
+            <li class="nav-item">
+              <a
+                class="nav-link"
+                href="{% url 'analysis:naive_bayes_dataset' %}"
+                >Naive Bayes</a
+              >
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'analysis:svm_dataset' %}"
+                >SVM</a
+              >
+            </li>
+            <li class="nav-item">
+              <a
+                class="nav-link"
+                href="{% url 'analysis:summary_performance' %}"
+                >Summary Performance</a
+              >
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'analysis:manajemen_user' %}"
+                >Manajemen User</a
+              >
+            </li>
+          </ul>
+          <ul class="navbar-nav ms-auto">
+            <li class="nav-item">
+              <a class="nav-link" href="#">LOGOUT</a>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+    <div class="container mt-3">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+          <li class="breadcrumb-item"><a href="/">Home</a></li>
+          <li class="breadcrumb-item active" aria-current="page">TF-IDF</li>
+        </ol>
+      </nav>
+    </div>
+
+    <!-- TF-IDF -->
+    <div class="container">
+      <h2>TF-IDF</h2>
+
+      <!-- Pesan -->
+      {% if messages %}
+      <div class="mb-3">
+        {% for message in messages %}
+        <div
+          class="alert alert-{% if message.tags == 'success' %}success{% else %}danger{% endif %}"
+          role="alert"
+        >
+          {{ message }}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <div class="table-container">
+        <table class="table table-bordered">
+          <thead>
+            <tr>
+              <th>Text</th>
+              <th>TF-IDF Scores (Top 5)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in tfidf_data %}
+            <tr>
+              <td>{{ item.text|default:"-" }}</td>
+              <td>
+                {% if item.scores %}
+                <ul class="score-list">
+                  {% for word, score in item.scores %}
+                  <li>{{ word }}: {{ score|floatformat:4 }}</li>
+                  {% endfor %}
+                </ul>
+                {% else %} Tidak ada skor TF-IDF. {% endif %}
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="2" class="text-center">Tidak ada data.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>

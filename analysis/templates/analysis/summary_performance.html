@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Summary Performance - Sentiment Analysis</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        padding-top: 70px;
+        background-color: #f5f5f5;
+      }
+      .navbar {
+        background-color: #1e3a8a;
+      }
+      .table-container {
+        background-color: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+      .confusion-matrix-container {
+        background-color: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        margin-top: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="{% url 'analysis:dashboard' %}"
+          >SENTIMENT ANALYSIS</a
+        >
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navbarNav"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav">
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'analysis:dashboard' %}"
+                >Dashboard</a
+              >
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'analysis:dataset' %}"
+                >Dataset</a
+              >
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'analysis:tfidf' %}">TF-IDF</a>
+            </li>
+            <li class="nav-item">
+              <a
+                class="nav-link"
+                href="{% url 'analysis:naive_bayes_dataset' %}"
+                >Naive Bayes</a
+              >
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'analysis:svm_dataset' %}"
+                >SVM</a
+              >
+            </li>
+            <li class="nav-item">
+              <a
+                class="nav-link active"
+                href="{% url 'analysis:summary_performance' %}"
+                >Summary Performance</a
+              >
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'analysis:manajemen_user' %}"
+                >Manajemen User</a
+              >
+            </li>
+          </ul>
+          <ul class="navbar-nav ms-auto">
+            {% if user.is_authenticated %}
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'analysis:logout' %}"
+                >LOGOUT ({{ user.username }})</a
+              >
+            </li>
+            {% else %}
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'analysis:login' %}">LOGIN</a>
+            </li>
+            {% endif %}
+          </ul>
+        </div>
+      </div>
+    </nav>
+    <div class="container mt-3">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+          <li class="breadcrumb-item"><a href="/">Home</a></li>
+          <li class="breadcrumb-item active" aria-current="page">
+            Summary Performance
+          </li>
+        </ol>
+      </nav>
+    </div>
+
+    <!-- Summary Performance -->
+    <div class="container">
+      <h2>Summary Performance</h2>
+
+      <!-- Pesan -->
+      {% if messages %}
+      <div class="mb-3">
+        {% for message in messages %}
+        <div
+          class="alert alert-{% if message.tags == 'success' %}success{% else %}danger{% endif %}"
+          role="alert"
+        >
+          {{ message }}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <!-- Tabel Performa -->
+      <div class="table-container">
+        <table class="table table-bordered">
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Accuracy</th>
+              <th>Precision</th>
+              <th>Recall</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Naive Bayes</td>
+              <td>{{ nb_metrics.accuracy|default:"0" }}%</td>
+              <td>{{ nb_metrics.precision|default:"0" }}%</td>
+              <td>{{ nb_metrics.recall|default:"0" }}%</td>
+            </tr>
+            <tr>
+              <td>SVM</td>
+              <td>{{ svm_metrics.accuracy|default:"0" }}%</td>
+              <td>{{ svm_metrics.precision|default:"0" }}%</td>
+              <td>{{ svm_metrics.recall|default:"0" }}%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Confusion Matrix -->
+      <div class="row">
+        <div class="col-md-6">
+          <div class="confusion-matrix-container">
+            <h5>Confusion Matrix Naive Bayes</h5>
+            <table class="table table-bordered">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Predicted Positive</th>
+                  <th>Predicted Negative</th>
+                  <th>Predicted Neutral</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Actual Positive</td>
+                  <td>{{ nb_confusion_matrix.0.0|default:"0" }}</td>
+                  <td>{{ nb_confusion_matrix.0.1|default:"0" }}</td>
+                  <td>{{ nb_confusion_matrix.0.2|default:"0" }}</td>
+                </tr>
+                <tr>
+                  <td>Actual Negative</td>
+                  <td>{{ nb_confusion_matrix.1.0|default:"0" }}</td>
+                  <td>{{ nb_confusion_matrix.1.1|default:"0" }}</td>
+                  <td>{{ nb_confusion_matrix.1.2|default:"0" }}</td>
+                </tr>
+                <tr>
+                  <td>Actual Neutral</td>
+                  <td>{{ nb_confusion_matrix.2.0|default:"0" }}</td>
+                  <td>{{ nb_confusion_matrix.2.1|default:"0" }}</td>
+                  <td>{{ nb_confusion_matrix.2.2|default:"0" }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="confusion-matrix-container">
+            <h5>Confusion Matrix SVM</h5>
+            <table class="table table-bordered">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Predicted Positive</th>
+                  <th>Predicted Negative</th>
+                  <th>Predicted Neutral</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Actual Positive</td>
+                  <td>{{ svm_confusion_matrix.0.0|default:"0" }}</td>
+                  <td>{{ svm_confusion_matrix.0.1|default:"0" }}</td>
+                  <td>{{ svm_confusion_matrix.0.2|default:"0" }}</td>
+                </tr>
+                <tr>
+                  <td>Actual Negative</td>
+                  <td>{{ svm_confusion_matrix.1.0|default:"0" }}</td>
+                  <td>{{ svm_confusion_matrix.1.1|default:"0" }}</td>
+                  <td>{{ svm_confusion_matrix.1.2|default:"0" }}</td>
+                </tr>
+                <tr>
+                  <td>Actual Neutral</td>
+                  <td>{{ svm_confusion_matrix.2.0|default:"0" }}</td>
+                  <td>{{ svm_confusion_matrix.2.1|default:"0" }}</td>
+                  <td>{{ svm_confusion_matrix.2.2|default:"0" }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>
