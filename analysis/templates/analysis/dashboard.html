@@ -93,9 +93,7 @@
             </li>
           </ul>
           <ul class="navbar-nav ms-auto">
-            <li class="nav-item">
-              <a class="nav-link" href="#">LOGOUT</a>
-            </li>
+            <li class="nav-item"><a class="nav-link" href="#">LOGOUT</a></li>
           </ul>
         </div>
       </div>
@@ -114,7 +112,11 @@
     <!-- Dashboard -->
     <div class="container">
       <h2>DASHBOARD</h2>
-      <!-- Statistik -->
+      {% if error %}
+      <div class="alert alert-warning">{{ error }}</div>
+      {% endif %}
+
+      <!-- Menampilkan statistik -->
       <div class="row mt-4">
         <div class="col-md-3">
           <div class="card-stats bg-light">
@@ -146,17 +148,11 @@
         </div>
       </div>
 
-      <!-- Distribusi Sentimen & Metrik -->
+      <!-- Diagram Akurasi, Presisi, dan Recall -->
       <div class="row mt-4">
         <div class="col-md-6">
           <div class="chart-container">
-            <h5>DISTRIBUSI SENTIMEN</h5>
-            <canvas id="sentimentPieChart"></canvas>
-          </div>
-        </div>
-        <div class="col-md-6">
-          <div class="chart-container">
-            <h5>DIAGRAM AKURASI, PRESISI DAN RECALL</h5>
+            <h5>DIAGRAM AKURASI, PRESISI, DAN RECALL</h5>
             <canvas id="performanceBarChart"></canvas>
           </div>
         </div>
@@ -184,14 +180,21 @@
         </div>
       </div>
 
-      <!-- Word Cloud & Three Word Combination -->
+      <!-- Word Cloud -->
       <div class="row mt-4">
         <div class="col-md-6">
           <div class="chart-container">
             <h5>WORDCLOUD</h5>
-            <div id="wordCloud"></div>
+            <img
+              src="data:image/png;base64,{{ wordcloud_image }}"
+              alt="Word Cloud"
+            />
           </div>
         </div>
+      </div>
+
+      <!-- Top 10 Three-Word Combinations -->
+      <div class="row mt-4">
         <div class="col-md-6">
           <div class="chart-container">
             <h5>TOP 10 THREE-WORD COMBINATIONS</h5>
@@ -200,117 +203,83 @@
         </div>
       </div>
     </div>
-
+    <div>
+      <h3>Confusion Matrix</h3>
+      <img src="data:image/png;base64,{{ cm_image }}" alt="Confusion Matrix" />
+    </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-      // Inisialisasi Chart
       // Pie Chart Distribusi Sentimen
       new Chart(document.getElementById('sentimentPieChart'), {
-          type: 'pie',
-          data: {
-              labels: ['Positif', 'Negatif', 'Netral'],
-              datasets: [{
-                  data: [{{ stats.positif }}, {{ stats.negatif }}, {{ stats.netral }}],
-                  backgroundColor: ['#1e90ff', '#ff4500', '#ffd700']
-              }]
-          }
+        type: 'pie',
+        data: {
+          labels: ['Positif', 'Negatif', 'Netral'],
+          datasets: [{
+            data: [{{ stats.positif }}, {{ stats.negatif }}, {{ stats.netral }}],
+            backgroundColor: ['#1e90ff', '#ff4500', '#ffd700']
+          }]
+        }
       });
 
-      // Bar Chart Metrik Performa
-      new Chart(document.getElementById('performanceBarChart'), {
+
+        // Bar Chart Metrik Performa
+        new Chart(document.getElementById('performanceBarChart'), {
           type: 'bar',
           data: {
-              labels: ['Akurasi', 'Presisi', 'Recall'],
-              datasets: [
-                  {
-                      label: 'Naive Bayes',
-                      data: [{{ metrics.naive_bayes.accuracy }}, {{ metrics.naive_bayes.precision }}, {{ metrics.naive_bayes.recall }}],
-                      backgroundColor: '#ff4500'
-                  },
-                  {
-                      label: 'SVM',
-                      data: [{{ metrics.svm.accuracy }}, {{ metrics.svm.precision }}, {{ metrics.svm.recall }}],
-                      backgroundColor: '#32cd32'
-                  }
-              ]
-          },
-          options: {
-              scales: {
-                  y: { beginAtZero: true, max: 100 }
+            labels: ['Akurasi', 'Presisi', 'Recall'],
+            datasets: [
+              {
+                label: 'Naive Bayes',
+                data: [{{ nb_metrics.accuracy }}, {{ nb_metrics.precision }}, {{ nb_metrics.recall }}],
+                backgroundColor: '#ff4500'
+              },
+              {
+                label: 'SVM',
+                data: [{{ svm_metrics.accuracy }}, {{ svm_metrics.precision }}, {{ svm_metrics.recall }}],
+                backgroundColor: '#32cd32'
               }
+            ]
+          },
+          options: {
+            scales: {
+              y: { beginAtZero: true, max: 100 }
+            }
           }
-      });
+        });
 
-      // Bar Chart Top 10 Kata Positif
+
+      // Top Words in Sentiment
       new Chart(document.getElementById('positiveWordsChart'), {
-          type: 'bar',
-          data: {
-              labels: [{% for word, count in top_words.positif %}"{{ word }}",{% endfor %}],
-              datasets: [{
-                  label: 'Count',
-                  data: [{% for word, count in top_words.positif %}{{ count }},{% endfor %}],
-                  backgroundColor: '#1e90ff'
-              }]
-          },
-          options: {
-              indexAxis: 'y'
-          }
+        type: 'bar',
+        data: {
+          labels: [{% for word, count in top_words.positif %}"{{ word }}", {% endfor %}],
+          datasets: [{
+            label: 'Count',
+            data: [{% for word, count in top_words.positif %}{{ count }}, {% endfor %}],
+            backgroundColor: '#1e90ff'
+          }]
+        },
+        options: {
+          indexAxis: 'y'
+        }
       });
 
-      // Bar Chart Top 10 Kata Negatif
-      new Chart(document.getElementById('negativeWordsChart'), {
-          type: 'bar',
-          data: {
-              labels: [{% for word, count in top_words.negatif %}"{{ word }}",{% endfor %}],
-              datasets: [{
-                  label: 'Count',
-                  data: [{% for word, count in top_words.negatif %}{{ count }},{% endfor %}],
-                  backgroundColor: '#ff4500'
-              }]
-          },
-          options: {
-              indexAxis: 'y'
-          }
-      });
+      // Repeat similar code for negative and neutral charts
 
-      // Bar Chart Top 10 Kata Netral
-      new Chart(document.getElementById('neutralWordsChart'), {
-          type: 'bar',
-          data: {
-              labels: [{% for word, count in top_words.netral %}"{{ word }}",{% endfor %}],
-              datasets: [{
-                  label: 'Count',
-                  data: [{% for word, count in top_words.netral %}{{ count }},{% endfor %}],
-                  backgroundColor: '#ffd700'
-              }]
-          },
-          options: {
-              indexAxis: 'y'
-          }
-      });
-
-      // Bar Chart Top 10 Kombinasi Tiga Kata
+      // Top 10 Three-Word Combinations Chart
       new Chart(document.getElementById('threeWordChart'), {
-          type: 'bar',
-          data: {
-              labels: [{% for phrase, count in three_word_combinations %}"{{ phrase }}",{% endfor %}],
-              datasets: [{
-                  label: 'Count',
-                  data: [{% for phrase, count in three_word_combinations %}{{ count }},{% endfor %}],
-                  backgroundColor: '#228b22'
-              }]
-          },
-          options: {
-              indexAxis: 'y'
-          }
-      });
-
-      // Word Cloud
-      WordCloud(document.getElementById('wordCloud'), {
-          list: [{% for word, freq in word_cloud %}"{{ word }}", {{ freq }}{% if not forloop.last %},{% endif %}{% endfor %}],
-          weightFactor: 2,
-          color: 'random-dark',
-          backgroundColor: '#fff'
+        type: 'bar',
+        data: {
+          labels: [{% for phrase, count in top_three_word_combinations %}"{{ phrase }}", {% endfor %}],
+          datasets: [{
+            label: 'Count',
+            data: [{% for phrase, count in top_three_word_combinations %}{{ count }}, {% endfor %}],
+            backgroundColor: '#228b22'
+          }]
+        },
+        options: {
+          indexAxis: 'y'
+        }
       });
     </script>
   </body>

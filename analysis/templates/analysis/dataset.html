@@ -275,23 +275,16 @@
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="uploadExcelModalLabel">Upload Excel</h5>
+                    <h5 class="modal-title" id="uploadExcelModalLabel">Upload CSV</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <form method="post" action="/dataset/upload_excel/" enctype="multipart/form-data">
+                <form method="post" enctype="multipart/form-data" action="{% url 'analysis:upload_excel' %}">
                     {% csrf_token %}
-                    <div class="modal-body">
-                        <div class="mb-3">
-                            <label for="excel_file" class="form-label">Pilih File Excel</label>
-                            <input type="file" class="form-control" id="excel_file" name="excel_file" accept=".xlsx, .xls" required>
-                        </div>
-                        <p class="text-muted">File Excel harus memiliki kolom 'text' (komentar). Sentimen akan ditentukan otomatis.</p>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-                        <button type="submit" class="btn btn-primary">Upload</button>
-                    </div>
+                    <label for="csv_file">Upload CSV:</label>
+                    <input type="file" name="csv_file" id="csv_file" accept=".csv" required>
+                    <button type="submit">Upload CSV</button>
                 </form>
+                  
             </div>
         </div>
     </div>

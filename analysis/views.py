@@ -1,6 +1,15 @@
 import os
+import shutil
 import string
 import logging
+import json
+import subprocess
+import tempfile
+import pandas as pd
+import nltk
+import re
+from collections import Counter
+from wordcloud import WordCloud
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
@@ -8,8 +17,6 @@ from django.contrib.auth.models import User
 from django.contrib import messages
 from django.contrib.auth.hashers import make_password
 from .models import Dataset
-import pandas as pd
-import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from Sastrawi.Stemmer.StemmerFactory import StemmerFactory
@@ -19,9 +26,14 @@ from sklearn.naive_bayes import MultinomialNB
 from sklearn.svm import LinearSVC
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, confusion_matrix
 from sklearn.model_selection import train_test_split
-import tweepy
-import instaloader
+from sklearn.metrics import confusion_matrix
+import matplotlib.pyplot as plt
+import seaborn as sns
 from imblearn.over_sampling import RandomOverSampler
+from io import BytesIO
+import base64
+from .models import Dataset
+
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -31,10 +43,6 @@ factory = StemmerFactory()
 stemmer = factory.create_stemmer()
 stop_factory = StopWordRemoverFactory()
 stopword = stop_factory.create_stop_word_remover()
-
-# Kredensial Twitter API (ganti dengan kredensial Anda)
-BEARER_TOKEN = "YOUR_BEARER_TOKEN"  # Ganti dengan token Anda
-INSTALOADER = instaloader.Instaloader()
 
 # Load lexicon dan kamus slang/stop words
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -91,7 +99,6 @@ def preprocess_text(text):
     text = stopword.remove(text)
     text = stemmer.stem(text)
     tokens = word_tokenize(text)
-    # Izinkan token alfanumerik untuk menjaga kata-kata kunci
     tokens = [t for t in tokens if t not in custom_stopwords]
     logger.debug(f"Teks: {text}, Tokens: {tokens}")
     return tokens
@@ -110,7 +117,7 @@ def determine_sentiment(text):
 # Fungsi pelatihan dan evaluasi model
 def train_and_evaluate_model(X_train, X_test, y_train, y_test, model_type="both"):
     models = {
-        "Naive Bayes": MultinomialNB(alpha=0.1),  # Alpha kecil untuk dataset kecil
+        "Naive Bayes": MultinomialNB(alpha=0.1),
         "SVM": LinearSVC(max_iter=1000)
     }
     metrics = {}
@@ -119,7 +126,6 @@ def train_and_evaluate_model(X_train, X_test, y_train, y_test, model_type="both"
         if model_type != "both" and name != model_type:
             continue
         try:
-            # Oversampling untuk menangani data tidak seimbang
             ros = RandomOverSampler(random_state=42)
             X_train_resampled, y_train_resampled = ros.fit_resample(X_train, y_train)
             model.fit(X_train_resampled, y_train_resampled)
@@ -161,7 +167,7 @@ def add_data(request):
         if text and sentiment in ['positif', 'negatif', 'netral']:
             stemmed_text = stemmer.stem(text)
             if stemmed_text:
-                Dataset.objects.create(text=text, sentiment=sentiment)  # Simpan teks asli
+                Dataset.objects.create(text=text, sentiment=sentiment)
                 messages.success(request, 'Data berhasil ditambahkan.')
             else:
                 messages.error(request, 'Teks tidak valid setelah stemming.')
@@ -169,13 +175,13 @@ def add_data(request):
             messages.error(request, 'Data tidak valid.')
     return redirect('analysis:dataset')
 
-def edit_data(request, data_id):
-    data = get_object_or_404(Dataset, id=data_id)
+def edit_data(request, id):
+    data = get_object_or_404(Dataset, id=id)
     if request.method == 'POST':
         text = request.POST.get('text', '').strip()
         sentiment = request.POST.get('sentiment', '').strip()
         if text and sentiment in ['positif', 'negatif', 'netral']:
-            data.text = text  # Simpan teks asli
+            data.text = text
             data.sentiment = sentiment
             data.save()
             messages.success(request, 'Data berhasil diperbarui.')
@@ -183,81 +189,280 @@ def edit_data(request, data_id):
             messages.error(request, 'Data tidak valid.')
     return redirect('analysis:dataset')
 
-def delete_data(request, data_id):
-    data = get_object_or_404(Dataset, id=data_id)
+def delete_data(request, id):
+    data = get_object_or_404(Dataset, id=id)
     data.delete()
     messages.success(request, 'Data berhasil dihapus.')
     return redirect('analysis:dataset')
 
-# Views untuk Crawling
 def crawl_twitter(request):
     if request.method == 'POST':
         keyword = request.POST.get('twitter_keyword', '').strip()
-        tweet_limit = int(request.POST.get('tweet_limit', 10))
-        tweet_limit = min(tweet_limit, 50)
-
         try:
-            client = tweepy.Client(bearer_token=BEARER_TOKEN)
-            tweets = client.search_recent_tweets(query=keyword, max_results=tweet_limit, tweet_fields=["created_at"])
+            tweet_limit = int(request.POST.get('tweet_limit', 10))
+            tweet_limit = min(tweet_limit, 50)  # Batasi untuk stabilitas
+        except ValueError:
+            messages.error(request, 'Batas tweet harus berupa angka.')
+            return redirect('analysis:dataset')
+        
+        if not keyword:
+            messages.error(request, 'Kata kunci tidak boleh kosong.')
+            return redirect('analysis:dataset')
+        
+        try:
+            # Bersihkan kata kunci untuk nama file
+            safe_keyword = re.sub(r'[^a-zA-Z0-9_-]', '', keyword.replace(' ', '_'))
+            if not safe_keyword:
+                safe_keyword = 'tweets'  # Fallback
+            
+            # Memastikan directory exists dan nama file aman
+            tweets_data_dir = os.path.join(BASE_DIR, 'tweets-data')
+            os.makedirs(tweets_data_dir, exist_ok=True)
+            output_file = os.path.join(tweets_data_dir, f"{safe_keyword}.csv")
+            
+            tweet_harvest_path = os.path.join(BASE_DIR, 'tweet-harvest')
+            
+            # Validasi folder tweet-harvest
+            if not os.path.exists(tweet_harvest_path):
+                raise FileNotFoundError(f"Folder tweet-harvest tidak ditemukan di {tweet_harvest_path}")
+            
+            # Set environment variable for auth token
+            auth_token = os.getenv('TWITTER_AUTH_TOKEN', '0c0be3298e17427f6fd02f3c468e5d479e841514')
+            
+            # Prepare the command as a list - much safer than using shell=True
+            cmd = [
+                'npx',
+                'tweet-harvest',
+                '-s', keyword,
+                '-l', str(tweet_limit),
+                '-t', auth_token,
+                '-o', output_file,
+                '--delay', '5000'
+            ]
+            
+            logger.debug(f"Menjalankan perintah: {' '.join(cmd)}")
+            
+            # Run the command without shell=True for security
+            process = subprocess.Popen(
+                cmd,
+                cwd=tweet_harvest_path,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            
+            stdout, stderr = process.communicate(timeout=120)  # Add timeout
+            
+            if process.returncode != 0:
+                logger.error(f"Proses gagal dengan kode: {process.returncode}")
+                logger.error(f"stderr: {stderr}")
+                raise subprocess.CalledProcessError(process.returncode, cmd, stderr)
+            
+            if not os.path.exists(output_file):
+                raise FileNotFoundError(f"File output {output_file} tidak dibuat.")
+            
+            # Process CSV file
+            df = pd.read_csv(output_file)
             count = 0
-            for tweet in tweets.data:
-                text = tweet.text
-                sentiment = determine_sentiment(text)
-                if not Dataset.objects.filter(text=text, sentiment=sentiment).exists():
+            for _, row in df.iterrows():
+                text = str(row.get('text', '')).strip()
+                if text and not Dataset.objects.filter(text=text).exists():
+                    sentiment = determine_sentiment(text)
                     Dataset.objects.create(text=text, sentiment=sentiment)
                     count += 1
-            messages.success(request, f'Berhasil mengambil {count} tweets dari Twitter.')
+            
+            if count > 0:
+                messages.success(request, f'Berhasil mengambil {count} tweet untuk kata kunci "{keyword}".')
+            else:
+                messages.warning(request, f'Tidak ada tweet baru ditemukan untuk kata kunci "{keyword}".')
+            
+            return redirect('analysis:dataset')
+        
+        except FileNotFoundError as e:
+            logger.error(f"Kesalahan file: {str(e)}")
+            messages.error(request, f'Gagal mengambil data Twitter: {str(e)}')
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Gagal menjalankan Tweet Harvest: {e}")
+            logger.error(f"Stderr: {e.stderr}")
+            messages.error(request, f'Gagal mengambil data Twitter: Perintah tidak dapat dijalankan')
+        except subprocess.TimeoutExpired as e:
+            logger.error(f"Waktu habis saat menjalankan Tweet Harvest: {e}")
+            messages.error(request, 'Waktu pemrosesan habis. Coba gunakan batas tweet yang lebih kecil.')
         except Exception as e:
             logger.error(f"Gagal mengambil data Twitter: {str(e)}")
             messages.error(request, f'Gagal mengambil data Twitter: {str(e)}')
+        
     return redirect('analysis:dataset')
 
+# Views untuk Instagram Scraper
 def crawl_instagram(request):
     if request.method == 'POST':
         hashtag = request.POST.get('instagram_hashtag', '').strip()
-        post_limit = int(request.POST.get('post_limit', 10))
-        post_limit = min(post_limit, 50)
+
+        # Validasi input hashtag
+        if not hashtag:
+            messages.error(request, 'Hashtag tidak boleh kosong.')
+            return redirect('analysis:dataset')
+        
+        try:
+            post_limit = int(request.POST.get('post_limit', 10))
+            post_limit = min(post_limit, 50)  # Batasi maksimal 50 postingan
+        except ValueError:
+            messages.error(request, 'Batas postingan harus berupa angka.')
+            return redirect('analysis:dataset')
+
+        # Remove # if it was included in the hashtag
+        if hashtag.startswith('#'):
+            hashtag = hashtag[1:]
 
         try:
-            posts = instaloader.Hashtag.from_name(INSTALOADER.context, hashtag).get_posts()
-            count = 0
-            for post in posts:
-                if count >= post_limit:
-                    break
-                if post.caption:
-                    text = post.caption
-                    sentiment = determine_sentiment(text)
-                    if not Dataset.objects.filter(text=text, sentiment=sentiment).exists():
-                        Dataset.objects.create(text=text, sentiment=sentiment)
-                        count += 1
-            messages.success(request, f'Berhasil mengambil {count} postingan dari Instagram.')
+            # Buat direktori sementara untuk menyimpan file hasil scraping
+            output_dir = tempfile.mkdtemp()
+            
+            # Jalankan perintah Instagram Scraper
+            command = [
+                "instagram-scraper",
+                hashtag,
+                "--tag",
+                "--maximum", str(post_limit),
+                "--destination", output_dir,
+                "--media-metadata",
+                "--media-types", "none"
+            ]
+            
+            logger.debug(f"Menjalankan perintah Instagram: {' '.join(command)}")
+            
+            # Run command with proper subprocess handling
+            process = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            
+            stdout, stderr = process.communicate(timeout=120)  # Add timeout
+            
+            output_file = os.path.join(output_dir, f"{hashtag}.json")
+            
+            if process.returncode != 0:
+                logger.error(f"Instagram scraper gagal dengan kode: {process.returncode}")
+                logger.error(f"Stderr: {stderr}")
+                raise subprocess.CalledProcessError(process.returncode, command, stderr)
+            
+            # Check if the file exists
+            if not os.path.exists(output_file):
+                logger.warning(f"File output {output_file} tidak ditemukan.")
+                messages.warning(request, f'Tidak ditemukan data untuk hashtag #{hashtag}.')
+                return redirect('analysis:dataset')
+            
+            # Process the JSON file
+            try:
+                with open(output_file, 'r', encoding='utf-8') as f:
+                    posts_data = json.load(f)
+                
+                count = 0
+                for post in posts_data:
+                    # Instagram API structure can change, handle with care
+                    try:
+                        edges = post.get('edge_media_to_caption', {}).get('edges', [])
+                        if edges and len(edges) > 0:
+                            text = edges[0].get('node', {}).get('text', '')
+                            if text and len(text.strip()) > 0:
+                                # Check if text already exists in dataset
+                                if not Dataset.objects.filter(text=text).exists():
+                                    sentiment = determine_sentiment(text)
+                                    Dataset.objects.create(text=text, sentiment=sentiment)
+                                    count += 1
+                    except Exception as e:
+                        logger.error(f"Error processing post: {str(e)}")
+                
+                if count > 0:
+                    messages.success(request, f'Berhasil mengambil {count} postingan dari Instagram untuk hashtag #{hashtag}.')
+                else:
+                    messages.warning(request, f'Tidak ada postingan baru ditemukan untuk hashtag #{hashtag}.')
+            except json.JSONDecodeError as e:
+                logger.error(f"Error decoding JSON: {str(e)}")
+                messages.error(request, f'Error membaca data JSON: {str(e)}')
+            
+        except FileNotFoundError as e:
+            logger.error(f"Program instagram-scraper tidak ditemukan: {str(e)}")
+            messages.error(request, 'Program instagram-scraper tidak ditemukan. Pastikan sudah terinstall dengan "pip install instagram-scraper".')
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Gagal menjalankan Instagram Scraper: {e}")
+            messages.error(request, f'Gagal menjalankan Instagram Scraper. Periksa kembali hashtag yang digunakan.')
+        except subprocess.TimeoutExpired as e:
+            logger.error(f"Waktu habis saat menjalankan Instagram Scraper: {e}")
+            messages.error(request, 'Waktu pemrosesan habis. Coba gunakan batas postingan yang lebih kecil.')
         except Exception as e:
             logger.error(f"Gagal mengambil data Instagram: {str(e)}")
             messages.error(request, f'Gagal mengambil data Instagram: {str(e)}')
+        
+        finally:
+            # Hapus direktori sementara jika sudah selesai
+            if 'output_dir' in locals() and os.path.exists(output_dir):
+                shutil.rmtree(output_dir, ignore_errors=True)
+        
     return redirect('analysis:dataset')
-
 def upload_excel(request):
-    if request.method == 'POST' and 'excel_file' in request.FILES:
-        excel_file = request.FILES['excel_file']
+    if request.method == 'POST' and 'csv_file' in request.FILES:
+        csv_file = request.FILES['csv_file']
         try:
-            df = pd.read_excel(excel_file)
-            if 'text' not in df.columns:
-                messages.error(request, "File Excel harus memiliki kolom 'text'.")
+            # Validasi ekstensi file
+            if not csv_file.name.endswith('.csv'):
+                messages.error(request, "File harus memiliki ekstensi .csv.")
                 return redirect('analysis:dataset')
+
+            # Validasi ukuran file (misalnya, batasi 10MB)
+            max_size = 10 * 1024 * 1024  # 10MB
+            if csv_file.size > max_size:
+                messages.error(request, "Ukuran file terlalu besar. Maksimum 10MB.")
+                return redirect('analysis:dataset')
+
+            # Logging informasi file
+            logger.debug(f"Mengunggah file CSV: {csv_file.name}, Ukuran: {csv_file.size} bytes")
+
+            # Coba membaca file CSV dengan beberapa encoding
+            encodings = ['utf-8', 'latin1', 'iso-8859-1']
+            df = None
+            for encoding in encodings:
+                try:
+                    csv_file.seek(0)  # Reset posisi file ke awal
+                    df = pd.read_csv(csv_file, encoding=encoding)
+                    logger.debug(f"Berhasil membaca CSV dengan encoding: {encoding}")
+                    break
+                except Exception as e:
+                    logger.warning(f"Gagal membaca CSV dengan encoding {encoding}: {str(e)}")
+                    continue
+
+            if df is None:
+                raise ValueError("Gagal membaca file CSV dengan encoding yang didukung (utf-8, latin1, iso-8859-1).")
+
+            # Periksa apakah ada kolom 'text' atau 'full_text'
+            text_column = None
+            if 'text' in df.columns:
+                text_column = 'text'
+            elif 'full_text' in df.columns:
+                text_column = 'full_text'
+            else:
+                messages.error(request, "File CSV harus memiliki kolom 'text' atau 'full_text'.")
+                return redirect('analysis:dataset')
+
             count = 0
             for _, row in df.iterrows():
-                text = str(row['text']).strip()
-                if text:
+                text = str(row[text_column]).strip()
+                if text and text != 'nan':  # Pastikan teks tidak kosong atau 'nan'
                     sentiment = determine_sentiment(text)
                     if not Dataset.objects.filter(text=text, sentiment=sentiment).exists():
                         Dataset.objects.create(text=text, sentiment=sentiment)
                         count += 1
-            messages.success(request, f'Berhasil mengimpor {count} data dari Excel.')
+            messages.success(request, f'Berhasil mengimpor {count} data dari CSV.')
+        except ValueError as e:
+            logger.error(f"Error membaca CSV: {str(e)}")
+            messages.error(request, f'Error membaca CSV: {str(e)}')
         except Exception as e:
-            logger.error(f"Error membaca Excel: {str(e)}")
-            messages.error(request, f'Error membaca Excel: {str(e)}')
+            logger.error(f"Error tak terduga saat membaca CSV: {str(e)}")
+            messages.error(request, f'Error tak terduga saat membaca CSV: {str(e)}')
     return redirect('analysis:dataset')
-
 # Views untuk Login dan Logout
 def login_view(request):
     if request.user.is_authenticated:
@@ -282,50 +487,114 @@ def logout_view(request):
     messages.success(request, "Anda telah berhasil logout.")
     return redirect('analysis:login')
 
-# Views untuk Dashboard
+def get_three_word_combinations(texts):
+    combinations = []
+    for text in texts:
+        words = re.findall(r'\b\w+\b', text.lower())
+        if len(words) >= 3:
+            combinations.extend([tuple(words[i:i+3]) for i in range(len(words)-2)])
+    return combinations
+
 def dashboard_view(request):
     dataset = Dataset.objects.all()
     texts = [d.text for d in dataset]
     labels = [d.sentiment for d in dataset]
 
+    # Validasi jika dataset tidak cukup
     if len(texts) < 6:
-        logger.warning("Data tidak cukup untuk dashboard")
         return render(request, 'analysis/dashboard.html', {
-            'nb_accuracy': 0,
-            'svm_accuracy': 0,
             'error': 'Data tidak cukup (minimal 6 entri). Silakan tambahkan data di menu Dataset.'
         })
 
-    stop_words = set(stopwords.words('indonesian'))
-    processed_texts = []
-    valid_labels = []
-    for text, label in zip(texts, labels):
-        tokens = preprocess_text(text)
-        processed_text = ' '.join(tokens) if tokens else ''
-        if processed_text:
-            processed_texts.append(processed_text)
-            valid_labels.append(label)
+    # Menghitung statistik sentimen
+    stats = {
+        'total_dataset': len(dataset),
+        'positif': dataset.filter(sentiment='positif').count(),
+        'negatif': dataset.filter(sentiment='negatif').count(),
+        'netral': dataset.filter(sentiment='netral').count()
+    }
 
-    if len(processed_texts) < 6:
-        logger.warning("Teks valid tidak cukup untuk dashboard")
-        return render(request, 'analysis/dashboard.html', {
-            'nb_accuracy': 0,
-            'svm_accuracy': 0,
-            'error': 'Teks valid tidak cukup setelah pemrosesan. Silakan tambahkan data di menu Dataset.'
-        })
+    # Menghitung jumlah kata dalam dataset
+    total_kata = {
+        'total_kata': sum(len(text.split()) for text in texts),
+        'kata_positif': sum(len(text.split()) for text, sentiment in zip(texts, labels) if sentiment == 'positif'),
+        'kata_negatif': sum(len(text.split()) for text, sentiment in zip(texts, labels) if sentiment == 'negatif'),
+        'kata_netral': sum(len(text.split()) for text, sentiment in zip(texts, labels) if sentiment == 'netral')
+    }
 
+    # TF-IDF untuk fitur teks
     vectorizer = TfidfVectorizer(max_features=500, min_df=1, max_df=0.8)
-    X = vectorizer.fit_transform(processed_texts)
-    y = valid_labels
+    X = vectorizer.fit_transform(texts)
+    y = labels
+
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    metrics, _ = train_and_evaluate_model(X_train, X_test, y_train, y_test)
-    context = {
-        'nb_accuracy': metrics["Naive Bayes"]['accuracy'],
-        'svm_accuracy': metrics["SVM"]['accuracy'],
+    # Melatih dan mengevaluasi model
+    metrics = {}
+    models = {
+        "Naive Bayes": MultinomialNB(),
+        "SVM": LinearSVC(max_iter=1000)
     }
-    return render(request, 'analysis/dashboard.html', context)
+    for model_name, model in models.items():
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+        metrics[model_name] = {
+            'accuracy': accuracy_score(y_test, y_pred) * 100,
+            'precision': precision_score(y_test, y_pred, average='weighted', zero_division=0) * 100,
+            'recall': recall_score(y_test, y_pred, average='weighted', zero_division=0) * 100,
+            'f1': f1_score(y_test, y_pred, average='weighted', zero_division=0) * 100,
+        }
 
+    # Top 10 Words in Each Sentiment
+    top_words = {
+        'positif': Counter(' '.join([text for text, sentiment in zip(texts, labels) if sentiment == 'positif']).split()).most_common(10),
+        'negatif': Counter(' '.join([text for text, sentiment in zip(texts, labels) if sentiment == 'negatif']).split()).most_common(10),
+        'netral': Counter(' '.join([text for text, sentiment in zip(texts, labels) if sentiment == 'netral']).split()).most_common(10)
+    }
+
+    # Top 10 Three Word Combinations
+    three_word_combinations = get_three_word_combinations(texts)
+    top_three_word_combinations = Counter(three_word_combinations).most_common(10)
+
+    # Word Cloud
+    word_cloud_data = ' '.join(texts)
+    wordcloud = WordCloud(width=800, height=400, background_color='white').generate(word_cloud_data)
+
+    # Save wordcloud to image
+    img = BytesIO()
+    wordcloud.to_image().save(img, format='PNG')
+    img.seek(0)
+    img_base64 = base64.b64encode(img.getvalue()).decode('utf-8')
+
+    context = {
+        'stats': stats,
+        'total_kata': total_kata,
+        'metrics': metrics,
+        'top_words': top_words,
+        'top_three_word_combinations': top_three_word_combinations,
+        'wordcloud_image': img_base64
+    }
+
+    return render(request, 'analysis/dashboard.html', context)
+  # Ambil data prediksi dan label aktual, misal:
+    y_true = ...  # label aktual
+    y_pred = ...  # hasil prediksi
+
+    cm = confusion_matrix(y_true, y_pred, labels=[0,1,2])
+    
+    # Membuat confusion matrix sebagai gambar (heatmap)
+    plt.figure(figsize=(4,3))
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
+    plt.xlabel('Prediksi')
+    plt.ylabel('Aktual')
+    
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png')
+    plt.close()
+    buf.seek(0)
+    img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+    
+    return render(request, "dashboard.html", {"cm_image": img_base64})
 # Views untuk TF-IDF
 def tfidf_view(request):
     dataset = Dataset.objects.all()
@@ -688,7 +957,7 @@ def svm_prediksi(request):
     model.fit(X_train_resampled, y_train_resampled)
 
     if request.method == 'POST':
-        input_text = request.POST.get('text', '').strip()
+        input_text = request.POST.get('input_text', '').strip()
         if input_text:
             tokens = preprocess_text(input_text)
             processed_input = ' '.join(tokens) if tokens else ''
@@ -708,6 +977,27 @@ def svm_prediksi(request):
         'active_menu': 'prediksi'
     }
     return render(request, 'analysis/svm_prediksi.html', context)
+
+
+def train_and_evaluate_model(X_train, X_test, y_train, y_test):
+    models = {
+        "Naive Bayes": MultinomialNB(),
+        "SVM": LinearSVC(max_iter=1000),
+    }
+    metrics = {}
+    predictions = {}
+
+    for name, model in models.items():
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+        predictions[name] = y_pred
+        metrics[name] = {
+            'accuracy': accuracy_score(y_test, y_pred) * 100,
+            'precision': precision_score(y_test, y_pred, average='weighted', zero_division=0) * 100,
+            'recall': recall_score(y_test, y_pred, average='weighted', zero_division=0) * 100,
+            'f1': f1_score(y_test, y_pred, average='weighted', zero_division=0) * 100,
+        }
+    return metrics, predictions
 
 # Views untuk Summary Performance
 def summary_performance(request):
