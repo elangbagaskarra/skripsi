@@ -33,6 +33,11 @@ from imblearn.over_sampling import RandomOverSampler
 from io import BytesIO
 import base64
 from .models import Dataset
+from .utils import case_folding, cleansing, tokenizing, stemming, stopword_removal,load_stopwords_from_file
+
+import os
+from django.conf import settings 
+
 
 
 # Setup logging
@@ -1139,3 +1144,71 @@ def delete_user(request, id):
     user.delete()
     messages.success(request, "Pengguna berhasil dihapus.")
     return redirect('analysis:manajemen_user')
+
+
+def preprocessing_view(request):
+    # Ambil 5 data teratas dari dataset
+    data = Dataset.objects.all()[:5]
+
+    # Ambil path absolut ke stopword.txt
+    stopword_file_path = os.path.join(settings.BASE_DIR, 'analysis', 'lexicon', 'stopword.txt')
+
+    # Load stopword dari file teks (hasil: set dalam lowercase)
+    stopword_list = load_stopwords_from_file(stopword_file_path)
+
+    result_list = []
+
+    for item in data:
+        original_text = item.text
+
+        folded   = case_folding(original_text)
+        cleaned  = cleansing(folded)
+        tokens   = tokenizing(cleaned)
+        removed  = stopword_removal(tokens, stopword_list)
+        stemmed  = stemming(removed)
+
+        result_list.append({
+            'original': original_text,
+            'case_folding': folded,
+            'cleansing': cleaned,
+            'tokenizing': tokens,
+            'stopword_removal': removed,
+            'stemming': stemmed,
+        })
+
+    return render(request, 'analysis/preprocessing.html', {
+        'results': result_list
+    })
+def case_folding_view(request):
+    data = Dataset.objects.all()  # Ambil semua data tanpa limit
+    result = [{'original': d.text, 'case_folding': case_folding(d.text)} for d in data]
+    return render(request, 'analysis/case_folding.html', {'results': result, 'active_menu': 'case_folding'})
+
+
+def cleansing_view(request):
+    data = Dataset.objects.all() 
+    result = [{'original': d.text, 'cleansing': cleansing(case_folding(d.text))} for d in data]
+    return render(request, 'analysis/cleansing.html', {'results': result, 'active_menu': 'cleansing'})
+
+def tokenizing_view(request):
+    data = Dataset.objects.all() 
+    result = [{'original': d.text, 'tokenizing': tokenizing(cleansing(case_folding(d.text)))} for d in data]
+    return render(request, 'analysis/tokenizing.html', {'results': result, 'active_menu': 'tokenizing'})
+
+def stopword_view(request):
+    stopwords = load_stopwords_from_file(os.path.join(settings.BASE_DIR, 'analysis', 'lexicon', 'stopword.txt'))
+    data = Dataset.objects.all() 
+    result = [{
+        'original': d.text,
+        'stopword_removal': stopword_removal(tokenizing(cleansing(case_folding(d.text))), stopwords)
+    } for d in data]
+    return render(request, 'analysis/stopword.html', {'results': result, 'active_menu': 'stopword'})
+
+def stemming_view(request):
+    stopwords = load_stopwords_from_file(os.path.join(settings.BASE_DIR, 'analysis', 'lexicon', 'stopword.txt'))
+    data = Dataset.objects.all() 
+    result = [{
+        'original': d.text,
+        'stemming': stemming(stopword_removal(tokenizing(cleansing(case_folding(d.text))), stopwords))
+    } for d in data]
+    return render(request, 'analysis/stemming.html', {'results': result, 'active_menu': 'stemming'})

@@ -2,8 +2,8 @@
 <html lang="id">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Metode SVM - Performance - Sentiment Analysis</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Metode Naive Bayes - Tokenizing - Sentiment Analysis</title>
     <link
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
       rel="stylesheet"
@@ -25,6 +25,7 @@
       }
       .sidebar .nav-link {
         color: #333;
+        transition: background-color 0.2s, color 0.2s;
       }
       .sidebar .nav-link.active {
         background-color: #ff4d4f;
@@ -36,6 +37,21 @@
         padding: 20px;
         border-radius: 10px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+      .empty-data {
+        text-align: center;
+        padding: 20px;
+        background-color: #f8d7da;
+        color: #721c24;
+        border-radius: 5px;
+        margin-top: 20px;
+      }
+      .table-responsive {
+        max-height: 400px;
+        overflow-y: auto;
+      }
+      .action-buttons {
+        margin-bottom: 20px;
       }
     </style>
   </head>
@@ -98,7 +114,17 @@
             </li>
           </ul>
           <ul class="navbar-nav ms-auto">
-            <li class="nav-item"><a class="nav-link" href="#">LOGOUT</a></li>
+            {% if user.is_authenticated %}
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'analysis:logout' %}"
+                >LOGOUT ({{ user.username }})</a
+              >
+            </li>
+            {% else %}
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'analysis:login' %}">LOGIN</a>
+            </li>
+            {% endif %}
           </ul>
         </div>
       </div>
@@ -111,48 +137,53 @@
             <a href="{% url 'analysis:dashboard' %}">Home</a>
           </li>
           <li class="breadcrumb-item">
-            <a href="{% url 'analysis:svm_dataset' %}">SVM</a>
+            <a href="{% url 'analysis:preprocessing' %}">Preprocessing</a>
           </li>
-          <li class="breadcrumb-item active" aria-current="page">
-            Performance
-          </li>
+          <li class="breadcrumb-item active" aria-current="page">Tokenizing</li>
         </ol>
       </nav>
     </div>
 
     <div class="container">
-      <h2>Metode SVM</h2>
+      <h2>Preprocessing</h2>
       <div class="row">
         <div class="col-md-3">
           <div class="sidebar">
-            <h5 class="text-danger">SVM Menu</h5>
+            <h5 class="text-danger">Preprocessing Menu</h5>
             <ul class="nav flex-column">
               <li class="nav-item">
                 <a
-                  class="nav-link {% if active_menu == 'dataset' %}active{% endif %}"
-                  href="{% url 'analysis:svm_dataset' %}"
-                  >1. Dataset</a
+                  class="nav-link {% if active_menu == 'case_folding' %}active{% endif %}"
+                  href="{% url 'analysis:case_folding' %}"
+                  >1. Case Folding</a
                 >
               </li>
               <li class="nav-item">
                 <a
-                  class="nav-link {% if active_menu == 'initial_process' %}active{% endif %}"
-                  href="{% url 'analysis:svm_initial_process' %}"
-                  >2. Initial Process</a
+                  class="nav-link {% if active_menu == 'cleansing' %}active{% endif %}"
+                  href="{% url 'analysis:cleansing' %}"
+                  >2. Cleansing</a
                 >
               </li>
               <li class="nav-item">
                 <a
-                  class="nav-link {% if active_menu == 'performance' %}active{% endif %}"
-                  href="{% url 'analysis:svm_performance' %}"
-                  >3. Performance</a
+                  class="nav-link {% if active_menu == 'tokenizing' %}active{% endif %}"
+                  href="{% url 'analysis:tokenizing' %}"
+                  >3. Tokenizing</a
                 >
               </li>
               <li class="nav-item">
                 <a
-                  class="nav-link {% if active_menu == 'prediksi' %}active{% endif %}"
-                  href="{% url 'analysis:svm_prediksi' %}"
-                  >4. Prediksi</a
+                  class="nav-link {% if active_menu == 'stopword' %}active{% endif %}"
+                  href="{% url 'analysis:stopword' %}"
+                  >4. Stopword Removal</a
+                >
+              </li>
+              <li class="nav-item">
+                <a
+                  class="nav-link {% if active_menu == 'stemming' %}active{% endif %}"
+                  href="{% url 'analysis:stemming' %}"
+                  >5. Stemming</a
                 >
               </li>
             </ul>
@@ -160,29 +191,52 @@
         </div>
         <div class="col-md-9">
           <div class="content-container">
-            <h5>Performance</h5>
-            <table class="table table-bordered">
-              <thead>
-                <tr>
-                  <th>Metric</th>
-                  <th>Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>Accuracy</td>
-                  <td>{{ metrics.accuracy|default:"N/A" }}%</td>
-                </tr>
-                <tr>
-                  <td>Precision</td>
-                  <td>{{ metrics.precision|default:"N/A" }}%</td>
-                </tr>
-                <tr>
-                  <td>Recall</td>
-                  <td>{{ metrics.recall|default:"N/A" }}%</td>
-                </tr>
-              </tbody>
-            </table>
+            <h5>Tokenizing</h5>
+            <div class="action-buttons">
+              <a
+                href="{% url 'analysis:dataset' %}"
+                class="btn btn-primary btn-sm"
+                >Tambah Data</a
+              >
+              <a
+                href="{% url 'analysis:naive_bayes_dataset' %}"
+                class="btn btn-secondary btn-sm"
+                >Kembali</a
+              >
+            </div>
+
+            {% if not results %}
+            <div class="empty-data">
+              <p>Tidak ada data untuk ditampilkan.</p>
+              <p>
+                Silakan tambahkan data di menu
+                <a href="{% url 'analysis:dataset' %}">Dataset</a>.
+              </p>
+            </div>
+            {% else %}
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover">
+                <thead class="table-light">
+                  <tr>
+                    <th scope="col">Original Text</th>
+                    <th scope="col">Tokenizing Result</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in results %}
+                  <tr>
+                    <td>{{ item.original }}</td>
+                    <td>{{ item.tokenizing }}</td>
+                  </tr>
+                  {% empty %}
+                  <tr>
+                    <td colspan="2" class="text-center">Tidak ada data.</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% endif %}
           </div>
         </div>
       </div>

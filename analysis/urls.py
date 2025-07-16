@@ -30,4 +30,10 @@ path('login_action/', views.login_action, name='login_action'),
     path('manajemen-user/add/', views.add_user, name='add_user'),
     path('manajemen-user/edit/<int:id>/', views.edit_user, name='edit_user'),
     path('manajemen-user/delete/<int:id>/', views.delete_user, name='delete_user'),
+    path('preprocessing/', views.preprocessing_view, name='preprocessing'),
+    path('preprocessing/case-folding/', views.case_folding_view, name='case_folding'),
+    path('preprocessing/cleansing/', views.cleansing_view, name='cleansing'),
+    path('preprocessing/tokenizing/', views.tokenizing_view, name='tokenizing'),  # bisa tambahkan lainnya
+    path('preprocessing/stopword/', views.stopword_view, name='stopword'),
+    path('preprocessing/stemming/', views.stemming_view, name='stemming'),
 ]
