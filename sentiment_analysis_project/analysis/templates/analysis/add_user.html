@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tambah Pengguna - Sentiment Analysis</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        padding-top: 70px;
+        background-color: #f5f5f5;
+      }
+      .navbar {
+        background-color: #1e3a8a;
+      }
+      .form-container {
+        background-color: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+      <div class="container-fluid">
+          <a class="navbar-brand" href="/analysis/templates/analysis/dashboard.html">SENTIMENT ANALYSIS</a>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+              <span class="navbar-toggler-icon"></span>
+          </button>
+          <div class="collapse navbar-collapse" id="navbarNav">
+              <ul class="navbar-nav">
+                  <li class="nav-item"><a class="nav-link" href="/analysis/templates/analysis/dashboard.html">DASHBOARD</a></li>
+                  <li class="nav-item"><a class="nav-link active" href="/analysis/templates/analysis/dataset.html">DATASET</a></li>
+                  <li class="nav-item"><a class="nav-link" href="/analysis/templates/analysis/tfidf.html">TF-IDF</a></li>
+                  <li class="nav-item"><a class="nav-link" href="/analysis/templates/analysis/naive_bayes_dataset.html">NAIVE BAYES</a></li>
+                  <li class="nav-item"><a class="nav-link" href="/analysis/templates/analysis/svm_dataset.html">SVM</a></li>
+                  <li class="nav-item"><a class="nav-link" href="/analysis/templates/analysis/summary_performance.html">SUMMARY PERFORMANCE</a></li>
+                  <li class="nav-item"><a class="nav-link" href="/analysis/templates/analysis/management_user.html">MANAJEMEN USER</a></li>
+              </ul>
+              <ul class="navbar-nav ms-auto">
+                  {% if user.is_authenticated %}
+                      <li class="nav-item"><a class="nav-link" href="{% url 'analysis:logout' %}">LOGOUT ({{ user.username }})</a></li>
+                  {% else %}
+                      <li class="nav-item"><a class="nav-link" href="{% url 'analysis:login' %}">LOGIN</a></li>
+                  {% endif %}
+              </ul>
+          </div>
+      </div>
+  </nav>
+    <div class="container mt-3">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+          <li class="breadcrumb-item"><a href="#">Home</a></li>
+          <li class="breadcrumb-item">
+            <a href="{% url 'manajemen_user' %}">Manajemen User</a>
+          </li>
+          <li class="breadcrumb-item active" aria-current="page">
+            Tambah Pengguna
+          </li>
+        </ol>
+      </nav>
+    </div>
+
+    <div class="container">
+      <h2>Tambah Pengguna</h2>
+      {% if messages %}
+      <div class="mb-3">
+        {% for message in messages %}
+        <div
+          class="alert alert-{% if message.tags == 'success' %}success{% else %}danger{% endif %}"
+          role="alert"
+        >
+          {{ message }}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      <div class="form-container">
+        <form method="post">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label for="username" class="form-label">Username</label>
+            <input
+              type="text"
+              class="form-control"
+              id="username"
+              name="username"
+              required
+            />
+          </div>
+          <div class="mb-3">
+            <label for="email" class="form-label">Email</label>
+            <input
+              type="email"
+              class="form-control"
+              id="email"
+              name="email"
+              required
+            />
+          </div>
+          <div class="mb-3">
+            <label for="password" class="form-label">Password</label>
+            <input
+              type="password"
+              class="form-control"
+              id="password"
+              name="password"
+              required
+            />
+          </div>
+          <div class="mb-3 form-check">
+            <input
+              type="checkbox"
+              class="form-check-input"
+              id="is_active"
+              name="is_active"
+              checked
+            />
+            <label class="form-check-label" for="is_active">Aktif</label>
+          </div>
+          <button type="submit" class="btn btn-primary">Simpan</button>
+          <a href="{% url 'manajemen_user' %}" class="btn btn-secondary"
+            >Batal</a
+          >
+        </form>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>

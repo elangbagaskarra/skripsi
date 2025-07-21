@@ -1,292 +1,285 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="id">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dashboard - Sentiment Analysis</title>
-    <link
-      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-      rel="stylesheet"
-    />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://unpkg.com/wordcloud@1.2.2/src/wordcloud2.js"></script>
-    <style>
-      body {
-        padding-top: 70px;
-        background-color: #f5f5f5;
-      }
-      .navbar {
-        background-color: #1e3a8a;
-      }
-      .card-stats {
-        text-align: center;
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-      }
-      .chart-container {
-        background-color: white;
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-      }
-      #wordCloud {
-        width: 100%;
-        height: 300px;
-        background-color: white;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-      }
-    </style>
-  </head>
-  <body>
-    <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
-      <div class="container-fluid">
-        <a class="navbar-brand" href="#">SENTIMENT ANALYSIS</a>
-        <button
-          class="navbar-toggler"
-          type="button"
-          data-bs-toggle="collapse"
-          data-bs-target="#navbarNav"
-        >
-          <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarNav">
-          <ul class="navbar-nav">
-            <li class="nav-item">
-              <a class="nav-link active" href="{% url 'analysis:dashboard' %}"
-                >Dashboard</a
-              >
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="{% url 'analysis:dataset' %}"
-                >Dataset</a
-              >
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="{% url 'analysis:preprocessing' %}"
-                >Preprocessing</a
-              >
-            </li>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard - Sentiment Analysis</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <style>
+    body { padding-top: 70px; background-color: #f5f5f5; }
+    .navbar { background-color: #1e3a8a; }
+    .card-stats, .chart-container {
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      background-color: white;
+      margin-bottom: 1.5rem;
+    }
+    .card-stats { text-align: center; }
+  </style>
+</head>
 
-            <li class="nav-item">
-              <a class="nav-link" href="{% url 'analysis:tfidf' %}">TF-IDF</a>
-            </li>
-            <li class="nav-item">
-              <a
-                class="nav-link"
-                href="{% url 'analysis:naive_bayes_dataset' %}"
-                >Naive Bayes</a
-              >
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="{% url 'analysis:svm_dataset' %}"
-                >SVM</a
-              >
-            </li>
-            <li class="nav-item">
-              <a
-                class="nav-link"
-                href="{% url 'analysis:summary_performance' %}"
-                >Summary Performance</a
-              >
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="{% url 'analysis:manajemen_user' %}"
-                >Manajemen User</a
-              >
-            </li>
-          </ul>
-          <ul class="navbar-nav ms-auto">
-            <li class="nav-item"><a class="nav-link" href="#">LOGOUT</a></li>
-          </ul>
-        </div>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="{% url 'analysis:dashboard' %}">SENTIMENT ANALYSIS</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+          <li class="nav-item"><a class="nav-link active" href="{% url 'analysis:dashboard' %}">Dashboard</a></li>
+          <li class="nav-item"><a class="nav-link" href="{% url 'analysis:dataset' %}">Dataset</a></li>
+          <li class="nav-item"><a class="nav-link" href="{% url 'analysis:preprocessing' %}">Preprocessing</a></li>
+          <li class="nav-item"><a class="nav-link" href="{% url 'analysis:tfidf' %}">TF-IDF</a></li>
+          <li class="nav-item"><a class="nav-link" href="{% url 'analysis:naive_bayes_dataset' %}">Naive Bayes</a></li>
+          <li class="nav-item"><a class="nav-link" href="{% url 'analysis:svm_dataset' %}">SVM</a></li>
+          <li class="nav-item"><a class="nav-link" href="{% url 'analysis:summary_performance' %}">Summary Performance</a></li>
+          {% if user.is_superuser %}
+          <li class="nav-item"><a class="nav-link" href="{% url 'analysis:manajemen_user' %}">Manajemen User</a></li>
+          {% endif %}
+        </ul>
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item"><a class="nav-link" href="{% url 'analysis:logout' %}">LOGOUT</a></li>
+        </ul>
       </div>
-    </nav>
-
+    </div>
+  </nav>
+  <!-- Konten Utama -->
+  <main class="container py-4">
     <!-- Breadcrumb -->
-    <div class="container mt-3">
-      <nav aria-label="breadcrumb">
-        <ol class="breadcrumb">
-          <li class="breadcrumb-item"><a href="#">Home</a></li>
-          <li class="breadcrumb-item active" aria-current="page">DASHBOARD</li>
-        </ol>
-      </nav>
-    </div>
-
-    <!-- Dashboard -->
-    <div class="container">
-      <h2>DASHBOARD</h2>
-      {% if error %}
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'analysis:dashboard' %}">Home</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Dashboard</li>
+      </ol>
+    </nav>
+    
+    <h2>DASHBOARD</h2>
+    <!-- Notifikasi -->
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+    {% if error %}
       <div class="alert alert-warning">{{ error }}</div>
-      {% endif %}
+    {% endif %}
 
-      <!-- Menampilkan statistik -->
-      <div class="row mt-4">
-        <div class="col-md-3">
-          <div class="card-stats bg-light">
-            <h5>TOTAL DATASET</h5>
-            <h3>{{ stats.total_dataset }}</h3>
-            <p>Total Kata: {{ total_kata.total_kata }}</p>
-          </div>
-        </div>
-        <div class="col-md-3">
-          <div class="card-stats bg-light">
-            <h5>DATASET - POSITIF</h5>
-            <h3>{{ stats.positif }}</h3>
-            <p>Total Kata: {{ total_kata.kata_positif }}</p>
-          </div>
-        </div>
-        <div class="col-md-3">
-          <div class="card-stats bg-light">
-            <h5>DATASET - NEGATIF</h5>
-            <h3>{{ stats.negatif }}</h3>
-            <p>Total Kata: {{ total_kata.kata_negatif }}</p>
-          </div>
-        </div>
-        <div class="col-md-3">
-          <div class="card-stats bg-light">
-            <h5>DATASET - NETRAL</h5>
-            <h3>{{ stats.netral }}</h3>
-            <p>Total Kata: {{ total_kata.kata_netral }}</p>
-          </div>
+    <!-- Statistik Dataset -->
+    <div class="row mt-4">
+      <div class="col-lg-3 col-md-6"><div class="card-stats"><h5>Total Dataset</h5><h3>{{ stats.total_dataset|default:0 }}</h3></div></div>
+      <div class="col-lg-3 col-md-6"><div class="card-stats"><h5>Dataset Positif</h5><h3>{{ stats.positif|default:0 }}</h3></div></div>
+      <div class="col-lg-3 col-md-6"><div class="card-stats"><h5>Dataset Negatif</h5><h3>{{ stats.negatif|default:0 }}</h3></div></div>
+      <div class="col-lg-3 col-md-6"><div class="card-stats"><h5>Dataset Netral</h5><h3>{{ stats.netral|default:0 }}</h3></div></div>
+    </div>
+
+    <!-- Grafik Utama -->
+    <div class="row">
+      <div class="col-md-6">
+        <div class="chart-container">
+          <h5>Distribusi Sentimen</h5>
+          {% if stats.total_dataset > 0 %}
+            <canvas id="sentimentPieChart"
+                data-stats='{{ stats|json_script:"stats-json" }}'></canvas>
+          {% else %}
+            <p>Tidak ada data sentimen untuk ditampilkan.</p>
+          {% endif %}
         </div>
       </div>
-
-      <!-- Diagram Akurasi, Presisi, dan Recall -->
-      <div class="row mt-4">
-        <div class="col-md-6">
-          <div class="chart-container">
-            <h5>DIAGRAM AKURASI, PRESISI, DAN RECALL</h5>
-            <canvas id="performanceBarChart"></canvas>
-          </div>
-        </div>
-      </div>
-
-      <!-- Top 10 Words -->
-      <div class="row mt-4">
-        <div class="col-md-4">
-          <div class="chart-container">
-            <h5>TOP 10 WORDS IN POSITIF SENTIMENT</h5>
-            <canvas id="positiveWordsChart"></canvas>
-          </div>
-        </div>
-        <div class="col-md-4">
-          <div class="chart-container">
-            <h5>TOP 10 WORDS IN NEGATIF SENTIMENT</h5>
-            <canvas id="negativeWordsChart"></canvas>
-          </div>
-        </div>
-        <div class="col-md-4">
-          <div class="chart-container">
-            <h5>TOP 10 WORDS IN NETRAL SENTIMENT</h5>
-            <canvas id="neutralWordsChart"></canvas>
-          </div>
-        </div>
-      </div>
-
-      <!-- Word Cloud -->
-      <div class="row mt-4">
-        <div class="col-md-6">
-          <div class="chart-container">
-            <h5>WORDCLOUD</h5>
-            <img
-              src="data:image/png;base64,{{ wordcloud_image }}"
-              alt="Word Cloud"
-            />
-          </div>
-        </div>
-      </div>
-
-      <!-- Top 10 Three-Word Combinations -->
-      <div class="row mt-4">
-        <div class="col-md-6">
-          <div class="chart-container">
-            <h5>TOP 10 THREE-WORD COMBINATIONS</h5>
-            <canvas id="threeWordChart"></canvas>
-          </div>
+      <div class="col-md-6">
+        <div class="chart-container">
+          <h5>Metrik Performa Model</h5>
+          {% if metrics %}
+            <canvas id="performanceBarChart"
+              data-metrics='{{ metrics|json_script:"metrics-json" }}'></canvas>
+          {% else %}
+            <p>Tidak ada data performa untuk ditampilkan.</p>
+          {% endif %}
         </div>
       </div>
     </div>
-    <div>
-      <h3>Confusion Matrix</h3>
-      <img src="data:image/png;base64,{{ cm_image }}" alt="Confusion Matrix" />
+
+    <!-- Top Words -->
+    <div class="row">
+      <div class="col-md-4">
+        <div class="chart-container">
+          <h5>Top 10 Kata Positif</h5>
+          {% if top_words.positif %}
+            <canvas id="positiveWordsChart"
+              data-words='{{ top_words|json_script:"top-words-json" }}'></canvas>
+          {% else %}
+            <p>Tidak ada data positif.</p>
+          {% endif %}
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="chart-container">
+          <h5>Top 10 Kata Negatif</h5>
+          {% if top_words.negatif %}
+            <canvas id="negativeWordsChart"
+              data-words='{{ top_words|json_script:"top-words-json" }}'></canvas>
+          {% else %}
+            <p>Tidak ada data negatif.</p>
+          {% endif %}
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="chart-container">
+          <h5>Top 10 Kata Netral</h5>
+          {% if top_words.netral %}
+            <canvas id="neutralWordsChart"
+              data-words='{{ top_words|json_script:"top-words-json" }}'></canvas>
+          {% else %}
+            <p>Tidak ada data netral.</p>
+          {% endif %}
+        </div>
+      </div>
     </div>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-      // Pie Chart Distribusi Sentimen
-      new Chart(document.getElementById('sentimentPieChart'), {
+    
+    <!-- Word Cloud dan 3 Kata -->
+    <div class="row">
+      <div class="col-md-6">
+        <div class="chart-container">
+          <h5>Word Cloud</h5>
+          {% if wordcloud_image %}
+            <img src="data:image/png;base64,{{ wordcloud_image }}" alt="Word Cloud" class="img-fluid" />
+          {% else %}
+            <p>Tidak ada data untuk Word Cloud.</p>
+          {% endif %}
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="chart-container">
+          <h5>Top 10 Kombinasi 3 Kata</h5>
+          {% if top_three_word_combinations %}
+            <canvas id="threeWordChart"
+              data-combinations='{{ top_three_word_combinations|json_script:"three-word-json" }}'></canvas>
+          {% else %}
+            <p>Tidak ada kombinasi kata.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    // Helper
+    function renderChart(canvasId, config) {
+      const canvas = document.getElementById(canvasId);
+      if (canvas) new Chart(canvas.getContext('2d'), config);
+    }
+
+    // PIE CHART SENTIMEN
+    (function(){
+      const c = document.getElementById('sentimentPieChart');
+      if (!c) return;
+      const data = JSON.parse(document.getElementById('stats-json').textContent);
+      renderChart('sentimentPieChart', {
         type: 'pie',
         data: {
           labels: ['Positif', 'Negatif', 'Netral'],
           datasets: [{
-            data: [{{ stats.positif }}, {{ stats.negatif }}, {{ stats.netral }}],
-            backgroundColor: ['#1e90ff', '#ff4500', '#ffd700']
+            data: [data.positif, data.negatif, data.netral],
+            backgroundColor: ['rgba(30,144,255,0.5)','rgba(255,69,0,0.5)','rgba(255,215,0,0.5)'],
+            borderWidth: 1
           }]
+        },
+        options:{responsive: true,plugins:{legend:{position:'top'}}}
+      });
+    })();
+
+    // BAR CHART PERFORMA
+    (function(){
+      const c = document.getElementById('performanceBarChart');
+      if (!c) return;
+      const data = JSON.parse(document.getElementById('metrics-json').textContent);
+      renderChart('performanceBarChart', {
+        type: 'bar',
+        data: {
+          labels: ['Akurasi','Presisi','Recall','F1-Score'],
+          datasets: [
+            {
+              label: 'Naive Bayes',
+              data: [data.Naive_Bayes.accuracy, data.Naive_Bayes.precision, data.Naive_Bayes.recall, data.Naive_Bayes.f1],
+              backgroundColor: 'rgba(255,99,132,0.5)', borderColor: 'rgba(255,99,132,1)', borderWidth: 1
+            },
+            {
+              label: 'SVM',
+              data: [data.SVM.accuracy, data.SVM.precision, data.SVM.recall, data.SVM.f1],
+              backgroundColor: 'rgba(54,162,235,0.5)', borderColor: 'rgba(54,162,235,1)', borderWidth: 1
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          plugins: {legend: {position: 'top'}},
+          scales: {y: {beginAtZero: true, max:100, title:{display:true,text:'Persentase (%)'}}}
         }
       });
+    })();
 
-
-        // Bar Chart Metrik Performa
-        new Chart(document.getElementById('performanceBarChart'), {
-          type: 'bar',
-          data: {
-            labels: ['Akurasi', 'Presisi', 'Recall'],
-            datasets: [
-              {
-                label: 'Naive Bayes',
-                data: [{{ nb_metrics.accuracy }}, {{ nb_metrics.precision }}, {{ nb_metrics.recall }}],
-                backgroundColor: '#ff4500'
-              },
-              {
-                label: 'SVM',
-                data: [{{ svm_metrics.accuracy }}, {{ svm_metrics.precision }}, {{ svm_metrics.recall }}],
-                backgroundColor: '#32cd32'
-              }
-            ]
+    // BAR CHART TOP WORDS (bisa ketiga sekaligus)
+    (function(){
+      function drawWordsChart(canvasId, senti, colors) {
+        const c = document.getElementById(canvasId);
+        if (!c) return;
+        const all = JSON.parse(document.getElementById('top-words-json').textContent);
+        const arr = all[senti] || [];
+        const labels = arr.map(x=>x[0]);
+        const counts = arr.map(x=>x[1]);
+        if (!labels.length) return;
+        renderChart(canvasId, {
+          type:'bar',
+          data:{
+            labels:labels,
+            datasets:[{
+              label:'Jumlah',
+              data:counts,
+              backgroundColor:colors[0],
+              borderColor:colors[1],
+              borderWidth:1
+            }]
           },
-          options: {
-            scales: {
-              y: { beginAtZero: true, max: 100 }
-            }
+          options:{
+            indexAxis:'y',
+            responsive:true,
+            plugins:{legend:{display:false}},
+            scales:{x:{title:{display:true,text:'Jumlah'}}}
           }
         });
+      }
+      drawWordsChart('positiveWordsChart','positif',['rgba(30,144,255,0.5)','rgba(30,144,255,1)']);
+      drawWordsChart('negativeWordsChart','negatif',['rgba(255,69,0,0.5)','rgba(255,69,0,1)']);
+      drawWordsChart('neutralWordsChart','netral',['rgba(255,215,0,0.5)','rgba(255,215,0,1)']);
+    })();
 
-
-      // Top Words in Sentiment
-      new Chart(document.getElementById('positiveWordsChart'), {
-        type: 'bar',
-        data: {
-          labels: [{% for word, count in top_words.positif %}"{{ word }}", {% endfor %}],
-          datasets: [{
-            label: 'Count',
-            data: [{% for word, count in top_words.positif %}{{ count }}, {% endfor %}],
-            backgroundColor: '#1e90ff'
+    // TIGA KATA
+    (function(){
+      const c = document.getElementById('threeWordChart');
+      if (!c) return;
+      const arr = JSON.parse(document.getElementById('three-word-json').textContent);
+      const labels = arr.map(x=>x[0].join(' ')), counts = arr.map(x=>x[1]);
+      if (!labels.length) return;
+      renderChart('threeWordChart',{
+        type:'bar',
+        data:{
+          labels:labels,
+          datasets:[{
+            label:'Jumlah',data:counts,
+            backgroundColor:'rgba(34,139,34,0.5)', borderColor:'rgba(34,139,34,1)', borderWidth:1
           }]
         },
-        options: {
-          indexAxis: 'y'
+        options:{
+          indexAxis:'y',responsive:true,
+          plugins:{legend:{display:false}},
+          scales:{x:{title:{display:true, text:'Jumlah'}}}
         }
       });
-
-      // Repeat similar code for negative and neutral charts
-
-      // Top 10 Three-Word Combinations Chart
-      new Chart(document.getElementById('threeWordChart'), {
-        type: 'bar',
-        data: {
-          labels: [{% for phrase, count in top_three_word_combinations %}"{{ phrase }}", {% endfor %}],
-          datasets: [{
-            label: 'Count',
-            data: [{% for phrase, count in top_three_word_combinations %}{{ count }}, {% endfor %}],
-            backgroundColor: '#228b22'
-          }]
-        },
-        options: {
-          indexAxis: 'y'
-        }
-      });
-    </script>
-  </body>
+    })();
+  </script>
+</body>
 </html>

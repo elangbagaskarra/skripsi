@@ -55,6 +55,10 @@ LEXICON_PATH = os.path.join(BASE_DIR, 'lexicon', 'modified_full_lexicon.csv')
 SLANG_PATH = os.path.join(BASE_DIR, 'lexicon', 'slang.csv')
 STOPWORD_PATH = os.path.join(BASE_DIR, 'lexicon', 'stopword.txt')
 
+def remove_urls(text):
+    # Regex untuk mendeteksi URL (termasuk https://t.co)
+    url_pattern = r'https?://\S+|www\.\S+'
+    return re.sub(url_pattern, '', text)
 # Load lexicon
 try:
     lexicon_df = pd.read_csv(LEXICON_PATH)
@@ -149,6 +153,7 @@ def train_and_evaluate_model(X_train, X_test, y_train, y_test, model_type="both"
     return metrics, predictions
 
 # Views untuk Dataset
+
 def dataset_view(request):
     search_text = request.GET.get('search_text', '')
     search_sentiment = request.GET.get('search_sentiment', '')
@@ -300,6 +305,7 @@ def crawl_twitter(request):
     return redirect('analysis:dataset')
 
 # Views untuk Instagram Scraper
+
 def crawl_instagram(request):
     if request.method == 'POST':
         hashtag = request.POST.get('instagram_hashtag', '').strip()
@@ -417,13 +423,13 @@ def upload_excel(request):
                 messages.error(request, "File harus memiliki ekstensi .csv.")
                 return redirect('analysis:dataset')
 
-            # Validasi ukuran file (misalnya, batasi 10MB)
+            # Validasi ukuran file
             max_size = 10 * 1024 * 1024  # 10MB
             if csv_file.size > max_size:
                 messages.error(request, "Ukuran file terlalu besar. Maksimum 10MB.")
                 return redirect('analysis:dataset')
 
-            # Logging informasi file
+            # Logging informasi file (opsional)
             logger.debug(f"Mengunggah file CSV: {csv_file.name}, Ukuran: {csv_file.size} bytes")
 
             # Coba membaca file CSV dengan beberapa encoding
@@ -431,7 +437,7 @@ def upload_excel(request):
             df = None
             for encoding in encodings:
                 try:
-                    csv_file.seek(0)  # Reset posisi file ke awal
+                    csv_file.seek(0)
                     df = pd.read_csv(csv_file, encoding=encoding)
                     logger.debug(f"Berhasil membaca CSV dengan encoding: {encoding}")
                     break
@@ -442,24 +448,32 @@ def upload_excel(request):
             if df is None:
                 raise ValueError("Gagal membaca file CSV dengan encoding yang didukung (utf-8, latin1, iso-8859-1).")
 
-            # Periksa apakah ada kolom 'text' atau 'full_text'
-            text_column = None
-            if 'text' in df.columns:
-                text_column = 'text'
-            elif 'full_text' in df.columns:
-                text_column = 'full_text'
-            else:
-                messages.error(request, "File CSV harus memiliki kolom 'text' atau 'full_text'.")
+            # --- Cari seluruh kolom yang bisa dipakai untuk teks/caption ---
+            text_columns = []
+            for col in df.columns:
+                if (
+                    col.lower() == 'text'
+                    or col.lower() == 'full_text'
+                    or col.lower() == 'caption'
+                    or (col.lower().endswith('/caption'))
+                ):
+                    text_columns.append(col)
+
+            if not text_columns:
+                messages.error(request, "File CSV harus memiliki setidaknya satu kolom: 'text', 'full_text', atau 'caption' (boleh juga 'topPosts/x/caption').")
                 return redirect('analysis:dataset')
 
             count = 0
             for _, row in df.iterrows():
-                text = str(row[text_column]).strip()
-                if text and text != 'nan':  # Pastikan teks tidak kosong atau 'nan'
-                    sentiment = determine_sentiment(text)
-                    if not Dataset.objects.filter(text=text, sentiment=sentiment).exists():
-                        Dataset.objects.create(text=text, sentiment=sentiment)
-                        count += 1
+                for col in text_columns:
+                    value = row.get(col)
+                    text = str(value).strip() if value is not None else ""
+                    if text and text.lower() != 'nan':
+                        sentiment = determine_sentiment(text)
+                        # Cek duplikat berdasarkan text dan sentiment
+                        if not Dataset.objects.filter(text=text, sentiment=sentiment).exists():
+                            Dataset.objects.create(text=text, sentiment=sentiment)
+                            count += 1
             messages.success(request, f'Berhasil mengimpor {count} data dari CSV.')
         except ValueError as e:
             logger.error(f"Error membaca CSV: {str(e)}")
@@ -468,6 +482,7 @@ def upload_excel(request):
             logger.error(f"Error tak terduga saat membaca CSV: {str(e)}")
             messages.error(request, f'Error tak terduga saat membaca CSV: {str(e)}')
     return redirect('analysis:dataset')
+
 # Views untuk Login dan Logout
 def login_view(request):
     if request.user.is_authenticated:
@@ -544,10 +559,10 @@ def dashboard_view(request):
         model.fit(X_train, y_train)
         y_pred = model.predict(X_test)
         metrics[model_name] = {
-            'accuracy': accuracy_score(y_test, y_pred) * 100,
-            'precision': precision_score(y_test, y_pred, average='weighted', zero_division=0) * 100,
-            'recall': recall_score(y_test, y_pred, average='weighted', zero_division=0) * 100,
-            'f1': f1_score(y_test, y_pred, average='weighted', zero_division=0) * 100,
+            'accuracy': round(accuracy_score(y_test, y_pred) * 100, 2),
+            'precision': round(precision_score(y_test, y_pred, average='weighted', zero_division=0) * 100, 2),
+            'recall': round(recall_score(y_test, y_pred, average='weighted', zero_division=0) * 100, 2),
+            'f1': round(f1_score(y_test, y_pred, average='weighted', zero_division=0) * 100, 2),
         }
 
     # Top 10 Words in Each Sentiment
@@ -561,15 +576,18 @@ def dashboard_view(request):
     three_word_combinations = get_three_word_combinations(texts)
     top_three_word_combinations = Counter(three_word_combinations).most_common(10)
 
-    # Word Cloud
-    word_cloud_data = ' '.join(texts)
-    wordcloud = WordCloud(width=800, height=400, background_color='white').generate(word_cloud_data)
-
-    # Save wordcloud to image
-    img = BytesIO()
-    wordcloud.to_image().save(img, format='PNG')
-    img.seek(0)
-    img_base64 = base64.b64encode(img.getvalue()).decode('utf-8')
+    # Word Cloud dengan pembersihan URL
+    cleaned_texts = [remove_urls(text) for text in texts]
+    word_cloud_data = ' '.join(cleaned_texts)
+    img_base64 = None
+    if word_cloud_data.strip():
+        wordcloud = WordCloud(width=800, height=400, background_color='white').generate(word_cloud_data)
+        img = BytesIO()
+        wordcloud.to_image().save(img, format='PNG')
+        img.seek(0)
+        img_base64 = base64.b64encode(img.getvalue()).decode('utf-8')
+    else:
+        logger.warning("Tidak ada teks valid untuk membuat word cloud setelah pembersihan URL.")
 
     context = {
         'stats': stats,
@@ -581,25 +599,6 @@ def dashboard_view(request):
     }
 
     return render(request, 'analysis/dashboard.html', context)
-  # Ambil data prediksi dan label aktual, misal:
-    y_true = ...  # label aktual
-    y_pred = ...  # hasil prediksi
-
-    cm = confusion_matrix(y_true, y_pred, labels=[0,1,2])
-    
-    # Membuat confusion matrix sebagai gambar (heatmap)
-    plt.figure(figsize=(4,3))
-    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
-    plt.xlabel('Prediksi')
-    plt.ylabel('Aktual')
-    
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png')
-    plt.close()
-    buf.seek(0)
-    img_base64 = base64.b64encode(buf.read()).decode('utf-8')
-    
-    return render(request, "dashboard.html", {"cm_image": img_base64})
 # Views untuk TF-IDF
 def tfidf_view(request):
     dataset = Dataset.objects.all()
@@ -1069,8 +1068,8 @@ def admin_required(view_func):
         return view_func(request, *args, **kwargs)
     return wrapper
 
-@login_required
-@admin_required
+
+
 def manajemen_user(request):
     users = User.objects.all()
     search_username = request.GET.get('search_username', '')
@@ -1081,8 +1080,7 @@ def manajemen_user(request):
         'search_username': search_username
     })
 
-@login_required
-@admin_required
+
 def add_user(request):
     if request.method == 'POST':
         username = request.POST.get('username')
@@ -1107,8 +1105,7 @@ def add_user(request):
         return redirect('analysis:manajemen_user')
     return render(request, 'analysis/add_user.html')
 
-@login_required
-@admin_required
+
 def edit_user(request, id):
     user = get_object_or_404(User, id=id)
     if request.method == 'POST':
@@ -1134,8 +1131,7 @@ def edit_user(request, id):
         return redirect('analysis:manajemen_user')
     return render(request, 'analysis/edit_user.html', {'user': user})
 
-@login_required
-@admin_required
+
 def delete_user(request, id):
     user = get_object_or_404(User, id=id)
     if user == request.user:
