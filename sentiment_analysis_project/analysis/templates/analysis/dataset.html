@@ -1,0 +1,86 @@
+from django.shortcuts import render, redirect
+from django.contrib import messages
+from .models import Dataset
+from django.contrib.auth.decorators import login_required
+import pandas as pd
+
+@login_required
+def dataset(request):
+    # Pencarian
+    search_text = request.GET.get('search_text', '')
+    search_sentiment = request.GET.get('search_sentiment', '')
+    dataset = Dataset.objects.all()
+
+    if search_text:
+        dataset = dataset.filter(text__icontains=search_text)
+    if search_sentiment:
+        dataset = dataset.filter(sentiment=search_sentiment)
+
+    context = {
+        'dataset': dataset,
+        'search_text': search_text,
+        'search_sentiment': search_sentiment,
+    }
+    return render(request, 'analysis/dataset.html', context)
+
+@login_required
+def add_data(request):
+    if request.method == 'POST':
+        text = request.POST.get('text')
+        sentiment = request.POST.get('sentiment')
+        if text and sentiment in ['positif', 'negatif', 'netral']:
+            Dataset.objects.create(text=text, sentiment=sentiment)
+            messages.success(request, 'Data berhasil ditambahkan.')
+        else:
+            messages.error(request, 'Data tidak valid.')
+        return redirect('analysis:dataset')
+    return redirect('analysis:dataset')
+
+@login_required
+def edit_data(request, data_id):
+    data = Dataset.objects.get(id=data_id)
+    if request.method == 'POST':
+        text = request.POST.get('text')
+        sentiment = request.POST.get('sentiment')
+        if text and sentiment in ['positif', 'negatif', 'netral']:
+            data.text = text
+            data.sentiment = sentiment
+            data.save()
+            messages.success(request, 'Data berhasil diperbarui.')
+        else:
+            messages.error(request, 'Data tidak valid.')
+        return redirect('analysis:dataset')
+    return redirect('analysis:dataset')
+
+@login_required
+def delete_data(request, data_id):
+    if request.method == 'POST':
+        try:
+            data = Dataset.objects.get(id=data_id)
+            data.delete()
+            messages.success(request, 'Data berhasil dihapus.')
+        except Dataset.DoesNotExist:
+            messages.error(request, 'Data tidak ditemukan.')
+        return redirect('analysis:dataset')
+    return redirect('analysis:dataset')
+
+@login_required
+def upload_excel(request):
+    if request.method == 'POST':
+        excel_file = request.FILES.get('excel_file')
+        if excel_file and excel_file.name.endswith(('.xlsx', '.xls')):
+            try:
+                df = pd.read_excel(excel_file)
+                if 'text' in df.columns and 'sentiment' in df.columns:
+                    for _, row in df.iterrows():
+                        if row['sentiment'] in ['positif', 'negatif', 'netral']:
+                            Dataset.objects.create(text=row['text'], sentiment=row['sentiment'])
+                    messages.success(request, 'Data dari Excel berhasil diunggah.')
+                else:
+                    messages.error(request, 'File Excel harus memiliki kolom "text" dan "sentiment".')
+            except Exception as e:
+                messages.error(request, f'Gagal mengunggah file: {str(e)}')
+        else:
+            messages.error(request, 'File tidak valid. Harus berupa .xlsx atau .xls.')
+        return redirect('analysis:dataset')
+    return redirect('analysis:dataset')
